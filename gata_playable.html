@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Gata</title>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:16px;padding-bottom:30px;background:#10251b;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:620px;margin:auto}h1{text-align:center;margin:8px 0 14px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat{background:#183b2b;padding:10px 6px;border-radius:12px;text-align:center}.stat b{display:block;font-size:24px}.table{margin:14px auto;background:#14552f;border:3px solid #b58b3a;border-radius:24px;padding:12px}.p{background:#17472b;border-radius:14px;padding:12px;margin:9px 0}.you{border:2px solid #ffd65a}.cards{display:flex;gap:7px;margin:8px 0;min-height:54px}.card{background:#fff;color:#111;border-radius:8px;padding:11px 8px;font-size:22px;font-weight:800;min-width:44px;text-align:center}.back{background:#263d83;color:#fff}.red{color:#c62828}.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}.btns button,body button{border:0;border-radius:10px;padding:13px 10px;font-weight:800;font-size:16px;touch-action:manipulation}.in{background:#48c774}.out{background:#d85b5b;color:#fff}.main{background:#ffd65a;width:100%;margin-top:10px}.secondary{background:#ddd;width:100%;margin-top:10px}.result{background:#0b1811;border-radius:14px;padding:14px;margin-top:12px;line-height:1.5}.change{text-align:center;font-size:28px;font-weight:900;margin:10px 0}.note{text-align:center;opacity:.8;font-size:13px;margin:10px 0}.disabled{opacity:.45}
+</style>
+</head>
+<body><div class="wrap">
+<h1>🐱 GATA</h1>
+<div class="stats"><div class="stat">POT<b id="pot">5</b></div><div class="stat">DEALER<b id="dealer">P1</b></div><div class="stat">HAND<b id="hand">1</b></div></div>
+<div class="table"><div id="players"></div><div class="p"><b>🐱 GATA</b><div id="gata" class="cards"></div></div><div id="result"></div><button id="show" class="main" onclick="showdown()">SHOWDOWN</button><button id="next" class="main" onclick="nextHand()">NEXT HAND</button><button class="secondary" onclick="newGame()">NEW GAME</button><div class="note">Aces and 7s are wild • Natural trips beat wild trips • A-7-7 is the top hand</div></div>
+</div>
+<script>
+const R=['2','3','4','5','6','7','J','Q','K','A'],S=['♠','♥','♦','♣'];
+const RV={2:2,3:3,4:4,5:5,6:6,7:7,J:11,Q:12,K:13,A:14};
+let g={pot:5,dealer:0,hand:1,h:[],gata:[],d:Array(5).fill(null),phase:'decision',result:''};
+function deck(){const d=[];for(const r of R)for(const s of S)d.push({r,s,w:r==='A'||r==='7'});return d.sort(()=>Math.random()-.5)}
+function deal(){let d=deck();g.h=Array.from({length:5},()=>d.splice(0,3));g.gata=d.splice(0,3);g.d=Array(5).fill(null);g.phase='decision';g.result='';render()}
+function val(r){return RV[r]}
+function ev(c){
+ const fixed=c.filter(x=>!x.w),w=3-fixed.length;
+ if(w===3)return{cat:5,n:'THREE WILDS',k:[5]};
+ const q={};fixed.forEach(x=>q[x.r]=(q[x.r]||0)+1);
+ const vals=fixed.map(x=>val(x.r)).sort((a,b)=>b-a);
+ const groups=Object.entries(q).sort((a,b)=>b[1]-a[1]||val(b[0])-val(a[0]));
+ if(w===0&&fixed.length===3&&groups.length===1)return{cat:4,n:'NATURAL TRIPS',k:[4,val(groups[0][0])]};
+ if(groups.length&&groups[0][1]+w>=3)return{cat:3,n:'WILD TRIPS',k:[3,val(groups[0][0])]};
+ if(groups.length&&groups[0][1]+w>=2){const p=val(groups[0][0]);const rest=vals.filter(x=>x!==p);return{cat:2,n:'PAIR',k:[2,p,rest.length?rest[0]:0]};}
+ return{cat:1,n:'HIGH CARD',k:[1,...vals]};
+}
+function cmp(a,b){for(let i=0;i<Math.max(a.k.length,b.k.length);i++){const x=a.k[i]||0,y=b.k[i]||0;if(x!==y)return x-y}return 0}
+function cards(c,hide){return c.map(x=>hide?'<div class="card back">🂠</div>':`<div class="card ${x.s==='♥'||x.s==='♦'?'red':''}">${x.r}${x.s}</div>`).join('')}
+function dec(i,x){if(g.phase!=='decision')return;g.d[i]=x;render()}
+function showdown(){
+ if(g.phase!=='decision')return;
+ const active=g.d.map((x,i)=>x==='IN'?i:-1).filter(i=>i>=0);
+ if(!active.length){g.result='<b>Everyone is OUT.</b><br>The pot carries forward unchanged.';g.phase='result';return render()}
+ const gh=ev(g.gata), ranked=active.map(i=>({i,e:ev(g.h[i])})).sort((a,b)=>cmp(b.e,a.e));
+ const top=ranked[0],ties=ranked.filter(x=>cmp(x.e,top.e)===0);
+ if(ties.length>1){g.result='<b>Tie.</b><br>No tiebreak rule is defined, so the pot carries forward unchanged.';g.phase='result';return render()}
+ const old=g.pot,beatGata=cmp(top.e,gh)>0;
+ if(active.length===1){
+   if(beatGata){g.pot=5;g.result=`<b>P${top.i+1} beats Gata!</b><br>${top.e.n}<div class="change">${old} → 5</div>Heads-up win resets the next pot to 5.`}
+   else{g.pot=old*2;g.result=`<b>Gata beats P${top.i+1}.</b><br>P${top.i+1} adds ${old} to the pot.<div class="change">${old} → ${g.pot}</div><b>NEXT POT: ${g.pot}</b>`}
+ }else if(beatGata){const losers=active.length-1;g.pot=old*losers;g.result=`<b>P${top.i+1} wins!</b><br>${top.e.n}<div class="change">${old} → ${g.pot}</div>${losers} active loser(s) each add ${old}.`}
+ else{g.pot=old*active.length;g.result=`<b>Gata beats all active players.</b><div class="change">${old} → ${g.pot}</div>${active.length} active player(s) each add ${old}.`}
+ g.phase='result';render();
+}
+function nextHand(){if(g.phase!=='result')return;g.hand++;g.dealer=(g.dealer+1)%5;deal()}
+function newGame(){g={pot:5,dealer:0,hand:1,h:[],gata:[],d:Array(5).fill(null),phase:'decision',result:''};deal()}
+function render(){
+ document.getElementById('pot').textContent=g.pot;document.getElementById('dealer').textContent='P'+(g.dealer+1);document.getElementById('hand').textContent=g.hand;
+ document.getElementById('players').innerHTML=g.h.map((h,i)=>`<div class="p ${i===0?'you':''}"><b>P${i+1}${i===0?' — YOU':''}${g.dealer===i?' — DEALER':''}${g.d[i]?' — '+g.d[i]:''}</b><div class="cards">${cards(h,g.phase==='decision'&&i!==0)}</div>${g.phase==='decision'?`<div class="btns"><button class="in" onclick="dec(${i},'IN')">IN</button><button class="out" onclick="dec(${i},'OUT')">OUT</button></div>`:''}</div>`).join('');
+ document.getElementById('gata').innerHTML=cards(g.gata,g.phase==='decision');
+ document.getElementById('result').innerHTML=g.result?`<div class="result">${g.result}</div>`:'';
+ document.getElementById('show').disabled=g.phase!=='decision';document.getElementById('next').disabled=g.phase!=='result';
+}
+deal();
+</script></body></html>
